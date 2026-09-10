@@ -1,0 +1,25 @@
+[project]
+name = "quant-stock-analyzer-backend"
+version = "0.1.0"
+description = "In-Depth Quant Stock Analyzer — quantitative backend (FastAPI + pandas)"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "PERF", "C4", "RUF"]
+ignore = [
+    # Line length is governed by readability; long numeric/table literals allowed.
+    "E501",
+    # date.today() is intentional: the platform has no timezone-aware clock requirement.
+    "DTZ011",
+    # Research-journal JSON decode is deliberately best-effort on read.
+    "SIM105",
+]
+
+[tool.pytest.ini_options]
+# Real config lives in backend/pytest.ini; this keeps `pytest` working from the repo root.
+testpaths = ["backend/tests"]
