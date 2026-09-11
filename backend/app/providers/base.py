@@ -36,6 +36,18 @@ _TTL_SECONDS = {
 }
 
 
+# Query parameters that must never be persisted to raw_cache (PROJECT_SPEC §7:
+# no credentials in storage, logs, or API responses). Cache identity is
+# computed on the sanitized params — safe because a credential is constant
+# for a given provider configuration, so it carries no extra distinction.
+_SECRET_PARAMS = frozenset({"apikey", "api_key", "token", "access_token"})
+
+
+def _sanitize_params(params: dict) -> dict:
+    return {k: v for k, v in params.items()
+            if str(k).lower() not in _SECRET_PARAMS}
+
+
 class DataProvider(ABC):
     """Common interface for financial data providers."""
 
@@ -63,7 +75,7 @@ class DataProvider(ABC):
     # ---------------- Cache + usage ----------------
     @staticmethod
     def _cache_key(endpoint: str, params: dict) -> str:
-        flat = json.dumps(params, sort_keys=True, default=str)
+        flat = json.dumps(_sanitize_params(params), sort_keys=True, default=str)
         digest = hashlib.sha256(f"{endpoint}|{flat}".encode()).hexdigest()[:32]
         return f"{digest}"
 
@@ -85,11 +97,13 @@ class DataProvider(ABC):
         expires = (
             datetime.now(UTC) + timedelta(seconds=ttl)
         ).strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Credentials are stripped before anything touches the database.
         with connect() as conn:
             conn.execute(
                 "INSERT INTO raw_cache (key, source, endpoint, params_json, payload,"
                 " retrieved_at, expires_at) VALUES (?,?,?,?,?,?,?)",
-                (key, self.name, endpoint, json.dumps(params, default=str),
+                (key, self.name, endpoint,
+                 json.dumps(_sanitize_params(params), default=str),
                  json.dumps(payload), utcnow(), expires),
             )
 
@@ -110,12 +124,22 @@ class DataProvider(ABC):
         return int(row["calls"]) if row else 0
 
     def _fetch(self, endpoint: str, params: dict, kind: str,
-               headers: dict | None = None, url: str | None = None) -> Any:
-        """Cached fetch: DB first, then live request. Records usage on live calls."""
+               headers: dict | None = None, url: str | None = None,
+               validate: Any | None = None) -> Any:
+        """Cached fetch: DB first, then live request. Records usage on live calls.
+
+        `validate(payload)` may raise (e.g. ProviderError) to reject a payload:
+        rejected payloads are NEVER cached, so provider error bodies — which
+        sometimes echo the apikey — cannot persist to the database.
+        """
         cached = self._cache_get(endpoint, params, kind)
         if cached is not None:
+            if validate is not None:
+                validate(cached)  # legacy rows must not silently serve garbage
             return cached
         payload = self._http_get(url or endpoint, params=params, headers=headers)
+        if validate is not None:
+            validate(payload)
         self._record_usage()
         self._cache_put(endpoint, params, payload, kind)
         return payload

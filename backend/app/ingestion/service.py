@@ -40,10 +40,65 @@ class IngestReport:
 class IngestionService:
     """Fetch + store data for tickers using all configured providers."""
 
+    # Price sources in preference order. Note (2026-09): Alpha Vantage's free
+    # tier now caps TIME_SERIES_DAILY at ~100 bars (outputsize=compact; the
+    # adjusted and full-history series moved to premium), while FMP's /stable/
+    # API returns ~6 years of dividend-adjusted bars — deep enough for the
+    # 12-1 momentum metrics in METHODOLOGY.md §11. FMP therefore leads for
+    # PRICES when configured. Statements remain SEC-first (Tier 1); this
+    # reordering is a deliberate response to the free-tier change, not a
+    # methodology edit.
+    PRICE_ORDER = ("fmp", "alpha_vantage")
+    # ~6 trading months: floor for meaningful 3M/6M momentum and consistency.
+    MIN_PRICE_BARS = 120
+
     def __init__(self, providers: list[DataProvider] | None = None):
         if providers is None:
             providers = [SECProvider(), AlphaVantageProvider(), FMPProvider()]
         self.providers = providers
+        self._by_name = {p.name: p for p in providers}
+
+    # ------------------------------------------------------------ prices
+    def _pick_price_bars(self, ticker: str, report: IngestReport,
+                         benchmark: bool = False):
+        """Choose the deepest usable price series across price providers.
+
+        A series shorter than MIN_PRICE_BARS is held only as a fallback (the
+        longest short series wins, with a validation note) so a degraded
+        history is still honest about being degraded.
+        """
+        getter_name = "get_benchmark_prices" if benchmark else "get_daily_prices"
+        # PRICE_ORDER leads; any other configured providers (custom or test
+        # mocks) keep their chance, in injection order.
+        ordered = [self._by_name[n] for n in self.PRICE_ORDER
+                   if n in self._by_name]
+        ordered += [p for p in self.providers
+                    if p.name not in self.PRICE_ORDER and p not in ordered]
+        fallback = None  # (prov_name, bars, reason)
+        for prov in ordered:
+            try:
+                bars = getattr(prov, getter_name)(ticker)
+            except ProviderError as exc:
+                report.errors.append(str(exc))
+                continue
+            if not bars:
+                continue
+            if len(bars) < self.MIN_PRICE_BARS:
+                if fallback is None or len(bars) > len(fallback[1]):
+                    fallback = (prov.name, bars,
+                                f"only {len(bars)} bars (< {self.MIN_PRICE_BARS})")
+                continue
+            vr = check_price_series(bars)
+            if not vr.ok:
+                report.validation.append(f"{prov.name}: {vr.summary()}")
+                continue
+            return prov.name, bars
+        if fallback is not None:
+            name, bars, reason = fallback
+            report.validation.append(
+                f"{name}: using short price series ({reason})")
+            return name, bars
+        return None
 
     # ----------------------------------------------------------------- api
     def ingest_ticker(self, ticker: str, with_prices: bool = True,
@@ -68,23 +123,14 @@ class IngestionService:
                     currency = company.currency
                     break
 
-            # -- Prices: AV first (adjusted series), FMP as fallback.
+            # -- Prices: deepest usable series wins (FMP stable leads while
+            #    AV free tier caps at ~100 bars; see PRICE_ORDER note).
             if with_prices:
-                for prov in self.providers:
-                    try:
-                        bars = prov.get_daily_prices(ticker)
-                    except ProviderError as exc:
-                        report.errors.append(str(exc))
-                        continue
-                    if bars:
-                        vr = check_price_series(bars)
-                        if not vr.ok:
-                            report.validation.append(
-                                f"{prov.name}: {vr.summary()}")
-                            continue
-                        n = repo.upsert_prices(conn, ticker, bars, prov.name)
-                        report.prices[prov.name] = n
-                        break
+                picked = self._pick_price_bars(ticker, report)
+                if picked is not None:
+                    prov_name, bars = picked
+                    n = repo.upsert_prices(conn, ticker, bars, prov_name)
+                    report.prices[prov_name] = n
 
             # -- Statements: SEC first (Tier 1), then FMP; keep BOTH sources
             #    in the DB (never overwrite one with the other silently).
@@ -139,15 +185,10 @@ class IngestionService:
     def ingest_benchmark(self, ticker: str) -> int:
         """Fetch benchmark price history only (e.g. SPY)."""
         ticker = validate_ticker(ticker)
-        for prov in self.providers:
-            try:
-                bars = prov.get_benchmark_prices(ticker)
-            except ProviderError:
-                continue
-            if bars:
-                vr = check_price_series(bars)
-                if not vr.ok:
-                    continue
-                with connect() as conn:
-                    return repo.upsert_prices(conn, ticker, bars, prov.name)
-        return 0
+        report = IngestReport(ticker=ticker)
+        picked = self._pick_price_bars(ticker, report, benchmark=True)
+        if picked is None:
+            return 0
+        prov_name, bars = picked
+        with connect() as conn:
+            return repo.upsert_prices(conn, ticker, bars, prov_name)

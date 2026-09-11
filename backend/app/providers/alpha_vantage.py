@@ -1,11 +1,17 @@
 """Alpha Vantage provider.
 
 Endpoints used (all free tier, apikey query param):
-- TIME_SERIES_DAILY_ADJUSTED  -> daily OHLCV + adjusted close + split/dividend factors
-- GLOBAL_QUOTE                -> latest quote
-- OVERVIEW                    -> company profile + TTM fundamental snapshot
-- INCOME_STATEMENT / BALANCE_SHEET / CASH_FLOW -> annual + quarterly statements
-- EARNINGS                    -> EPS actual vs estimate history
+- TIME_SERIES_DAILY  -> daily OHLCV (compact output: ~100 most recent bars)
+- OVERVIEW           -> company profile + TTM fundamental snapshot
+- INCOME_STATEMENT / BALANCE_SHEET / CASH_FLOW -> annual statements
+- EARNINGS           -> EPS actual vs estimate history
+
+Free-tier reality (verified 2026-09): TIME_SERIES_DAILY_ADJUSTED and
+outputsize=full are premium features — requesting them returns an
+"Information" notice instead of data. TIME_SERIES_DAILY + compact is the
+largest price history the free tier offers. Bars carry no adjusted close,
+so momentum/risk use raw closes here (FMP's dividend-adjusted series fills
+the gap when its key is configured).
 
 Error semantics: AV returns HTTP 200 with a JSON body for errors, so we inspect
 payload keys ("Error Message", "Note", "Information") rather than status alone.
@@ -38,11 +44,36 @@ def _d(s) -> date | None:
         return None
 
 
+def _redact(msg: str) -> str:
+    """AV echoes the apikey inside some notice bodies; never propagate it
+    into logs, reports, or API responses (PROJECT_SPEC §7)."""
+    return msg.replace(config.ALPHA_VANTAGE_API_KEY or "\x00", "[redacted]")[:200]
+
+
 class AlphaVantageProvider(DataProvider):
     name = "alpha_vantage"
 
+    # Cache kind per endpoint function (drives the raw_cache TTL).
+    _KINDS: ClassVar[dict[str, str]] = {
+        "TIME_SERIES_DAILY": "prices",
+        "OVERVIEW": "fundamentals",
+        "INCOME_STATEMENT": "statements",
+        "BALANCE_SHEET": "statements",
+        "CASH_FLOW": "statements",
+        "EARNINGS": "earnings",
+    }
+
     def available(self) -> bool:
         return bool(config.ALPHA_VANTAGE_API_KEY)
+
+    @staticmethod
+    def _reject_notice(payload: dict) -> None:
+        """Raise on AV error/notice bodies so they are never cached (their
+        text can echo the apikey) and never mistaken for data."""
+        if isinstance(payload, dict):
+            for key in ("Error Message", "Note", "Information"):
+                if key in payload:
+                    raise ProviderError("alpha_vantage", f"{key}: {_redact(payload[key])}")
 
     # ------------------------------------------------------------- helpers
     def _query(self, function: str, params: dict | None = None) -> dict:
@@ -53,17 +84,21 @@ class AlphaVantageProvider(DataProvider):
         p = {"function": function, "apikey": config.ALPHA_VANTAGE_API_KEY,
              "datatype": "json"}
         p.update(params or {})
-        payload = self._http_get(_BASE, params=p)
-        if isinstance(payload, dict):
-            for key in ("Error Message", "Note", "Information"):
-                if key in payload:
-                    raise ProviderError(self.name, f"{key}: {payload[key][:200]}")
+        # Route through the shared cached fetch so AV's brutal 25/day free
+        # budget is only spent on cache misses, and usage is actually recorded
+        # (calls_today() is meaningless otherwise).
+        payload = self._fetch(f"av:{function}", p, self._KINDS.get(function, "default"),
+                              url=_BASE, validate=type(self)._reject_notice)
         return payload
 
     # ------------------------------------------------------------- prices
     def get_daily_prices(self, ticker: str, outputsize: str = "full") -> list[S.PriceBar]:
-        payload = self._query("TIME_SERIES_DAILY_ADJUSTED",
-                              {"symbol": ticker, "outputsize": outputsize})
+        # Free tier: TIME_SERIES_DAILY only, outputsize=compact only (~100
+        # bars). Requesting the adjusted series or full history yields an
+        # "Information" notice (raised as ProviderError by _query) — so the
+        # size is pinned regardless of the caller's request.
+        payload = self._query("TIME_SERIES_DAILY",
+                              {"symbol": ticker, "outputsize": "compact"})
         series = payload.get("Time Series (Daily)") or {}
         bars: list[S.PriceBar] = []
         for ds, row in series.items():
@@ -76,8 +111,10 @@ class AlphaVantageProvider(DataProvider):
                 high=_f(row.get("2. high")),
                 low=_f(row.get("3. low")),
                 close=_f(row.get("4. close")),
+                # No adjusted close on the free series; None is stored honestly
+                # and model.py falls back to raw close for momentum.
                 adj_close=_f(row.get("5. adjusted close")),
-                volume=_f(row.get("6. volume")),
+                volume=_f(row.get("5. volume")) or _f(row.get("6. volume")),
             ))
         bars.sort(key=lambda b: b.date)
         return bars
@@ -139,8 +176,7 @@ class AlphaVantageProvider(DataProvider):
 
     _INCOME_MAP: ClassVar[dict[str, str]] = {
         "totalRevenue": "revenue", "costOfRevenue": "cost_of_revenue",
-        "grossProfit": "gross_profit", "researchAndDevement": "research_development",
-        "researchAndDevelopment": "research_development",
+        "grossProfit": "gross_profit", "researchAndDevelopment": "research_development",
         "operatingIncome": "operating_income", "ebit": "ebit",
         "netIncome": "net_income", "ebitda": "ebitda",
         "incomeBeforeTax": "pretax_income", "incomeTaxExpense": "tax_expense",

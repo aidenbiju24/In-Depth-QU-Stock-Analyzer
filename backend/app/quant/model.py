@@ -95,7 +95,8 @@ def _momentum(prices: pd.Series, on: pd.Timestamp, days: int) -> float:
 
 
 def _consistency(prices: pd.Series, on: pd.Timestamp) -> float:
-    window = prices.loc[:on].last("400D")
+    # Slice by date — Series.last() was removed in pandas 3.0.
+    window = prices.loc[on - pd.Timedelta(days=400):on]
     if len(window) < 40:
         return float("nan")
     r = window.pct_change().dropna()

@@ -176,6 +176,22 @@ def ingest(ticker: str, force: bool = Query(False)):
     }
 
 
+@app.post("/api/ingest-benchmark/{ticker}")
+def ingest_benchmark(ticker: str):
+    """Fetch price history for a benchmark index/ETF (e.g. SPY) only.
+
+    Benchmarks are not investment candidates: they get prices exclusively, so
+    universe scans never ingest SPY as a position. Required by the
+    rel_strength_12m and beta_deviation factors and by the regime endpoint.
+    """
+    t = validate_ticker(ticker)
+    n = _INGEST.ingest_benchmark(t)
+    if not n:
+        raise _err(502, f"no benchmark price series could be fetched for {t};"
+                        " check provider errors via the provider report")
+    return {"ticker": t, "prices_stored": n}
+
+
 # ------------------------------------------------------------------- quote
 @app.get("/api/quote/{ticker}")
 def quote(ticker: str):
