@@ -1,7 +1,14 @@
-/** Typed client for the local FastAPI backend. All requests go through the
- * Next.js rewrite to /api — the browser never touches external providers. */
+/** Typed client for the local FastAPI backend.
+ *
+ * The browser talks ONLY to our own quant service — never to external data
+ * providers (PROJECT_SPEC §8). In dev it calls FastAPI directly on :8000
+ * (CORS is configured server-side); the Next.js rewrite for /api/* remains
+ * as a fallback for deployments that prefer same-origin proxying.
+ * Override with NEXT_PUBLIC_QUANT_API_URL when serving from another origin.
+ */
 
-export const API = "/api";
+export const API =
+  process.env.NEXT_PUBLIC_QUANT_API_URL ?? "http://127.0.0.1:8000/api";
 
 export class ApiError extends Error {
   status: number;
@@ -56,7 +63,7 @@ export interface Health {
   time: string;
   db: string;
   row_counts: Record<string, number>;
-  credentials_missing: string[];
+  credentials_missing: Record<string, boolean>;
 }
 
 export interface Quote {
