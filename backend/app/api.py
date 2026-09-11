@@ -45,7 +45,10 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -232,6 +235,88 @@ def analyze_metrics_breakdown(ticker: str, as_of: str | None = Query(None)):
             "coverage": result.coverage, "missing": result.missing}
 
 
+# ------------------------------------------------------ DCF input derivation
+@app.get("/api/dcf-inputs/{ticker}")
+def dcf_inputs(ticker: str, as_of: str | None = Query(None)):
+    """Derive DCF assumption starting points from the most recent stored
+    filings (point-in-time on as_of). Every derived value names its source;
+    non-derivable assumptions (WACC, terminal growth, WC change) are flagged
+    as placeholders for the analyst to override."""
+    from .quant.model import _latest_stmt_before, _stmt_before
+
+    t = validate_ticker(ticker)
+    on = date.fromisoformat(as_of) if as_of else date.today()
+    with connect() as conn:
+        income = _statement_items(conn, t, "income")
+        balance = _statement_items(conn, t, "balance")
+        cash = _statement_items(conn, t, "cashflow")
+        fund = conn.execute(
+            "SELECT * FROM fundamentals WHERE ticker = ?"
+            " ORDER BY as_of DESC LIMIT 1", (t,)).fetchone()
+        px = _prices_frame(conn, t)
+
+    def item(st, key):
+        return None if st is None else ((st["items"] or {}).get(key))
+
+    inc_now = _latest_stmt_before(income, on)
+    bal_now = _latest_stmt_before(balance, on)
+    cf_now = _latest_stmt_before(cash, on)
+    inc_1y = _stmt_before(income, 1.0, on)
+    if inc_now is None:
+        raise _err(404, f"no income statements stored for {t}; ingest first")
+
+    revenue = item(inc_now, "revenue")
+    ebit = item(inc_now, "operating_income")
+    da = item(cf_now, "depreciation_amortization")
+    capex = item(cf_now, "capex")
+    cash_v = item(bal_now, "cash")
+    std = item(bal_now, "short_term_debt")
+    ltd = item(bal_now, "long_term_debt")
+    tax = item(inc_now, "tax_expense")
+    pretax = item(inc_now, "pretax_income")
+    shares = fund["shares_diluted"] if fund else None
+    if shares is None:
+        # SEC reports weighted-average diluted shares on the income statement;
+        # balance sheets only carry the point-in-time outstanding count.
+        shares = item(inc_now, "shares_diluted")
+    if shares is None:
+        shares = item(bal_now, "shares_outstanding")
+    price = float(px.iloc[-1]) if not px.empty else None
+
+    rev_1y = item(inc_1y, "revenue")
+    growth_1y = (revenue / rev_1y - 1.0) if (revenue and rev_1y and rev_1y > 0) else None
+
+    debt_parts = [d for d in (std, ltd) if d is not None]
+    total_debt = sum(debt_parts) if debt_parts else None
+    net_debt = (total_debt - cash_v) if (total_debt is not None and cash_v is not None) else None
+
+    derived: dict[str, float | None] = {
+        "base_revenue": revenue,
+        "revenue_growth_1y": round(growth_1y, 4) if growth_1y is not None else None,
+        "ebit_margin": round(ebit / revenue, 4) if (ebit is not None and revenue) else None,
+        "capex_pct_revenue": round(abs(capex) / revenue, 4) if (capex is not None and revenue) else None,
+        "depreciation_pct_revenue": round(da / revenue, 4) if (da is not None and revenue) else None,
+        "effective_tax_rate": round(tax / pretax, 4) if (tax is not None and pretax and pretax > 0) else None,
+        "net_debt": net_debt,
+        "shares_diluted": shares,
+        "current_price": price,
+    }
+    placeholders = {
+        "wacc": 0.10,
+        "terminal_growth": 0.02,
+        "wc_change_pct_revenue": 0.01,
+    }
+    missing = [k for k, v in derived.items() if v is None]
+    return {
+        "ticker": t,
+        "as_of": on.isoformat(),
+        "fiscal_date": inc_now["fiscal_date"],
+        "derived": derived,
+        "placeholders": placeholders,
+        "missing": missing,
+    }
+
+
 # --------------------------------------------------------------------- DCF
 class DCFBody(BaseModel):
     base_revenue: float = Field(gt=0)
@@ -256,7 +341,8 @@ def dcf(ticker: str, body: DCFBody, years: int = Query(5, ge=1, le=10)):
         result = run_dcf(a, years)
     except InvalidAssumptionError as exc:
         raise _err(422, str(exc)) from exc
-    payload = {        "ticker": t,
+    payload = {
+        "ticker": t,
         "fair_value_per_share": round(result.fair_value_per_share, 2),
         "enterprise_value": result.enterprise_value,
         "equity_value": result.equity_value,

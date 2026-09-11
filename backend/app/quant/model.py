@@ -39,11 +39,23 @@ def _latest_stmt_before(stmts: list[dict], on: date) -> dict | None:
 
 
 def _stmt_before(stmts: list[dict], years: float, on: date) -> dict | None:
-    """Statement closest to (on - years) that is still filed before `on`."""
-    target = on - timedelta(days=int(365.25 * years))
+    """Statement ~`years` before the LATEST statement available at `on`.
+
+    Both the base and the comparison statement must be filed by `on`. Anchoring
+    on the latest statement (rather than on `on - years`) prevents the latest
+    filing from being compared against itself when the fiscal year-end falls
+    near the analysis date — which would silently zero every YoY metric.
+    """
+    latest = _latest_stmt_before(stmts, on)
+    if latest is None:
+        return None
+    latest_fd = date.fromisoformat(latest["fiscal_date"])
+    target = latest_fd - timedelta(days=int(365.25 * years))
     best, best_gap = None, None
     for st in stmts:
         fd = date.fromisoformat(st["fiscal_date"])
+        if fd >= latest_fd:
+            continue  # strictly earlier than the base statement
         filed = st.get("filing_date")
         filed = date.fromisoformat(filed) if filed else fd
         if filed > on:

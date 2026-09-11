@@ -226,9 +226,19 @@ def today() -> str:
 
 
 def connect() -> sqlite3.Connection:
+    """Open a connection in autocommit mode with WAL + busy timeout.
+
+    Autocommit is deliberate: ingestion holds a connection across slow provider
+    HTTP calls, and an implicit write transaction there would block the
+    provider layer's usage-tracking writes ("database is locked"). With
+    isolation_level=None each statement commits immediately, so writers only
+    contend for milliseconds. WAL lets readers proceed during those writes.
+    """
     Path(config.DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(config.DB_PATH)
+    conn = sqlite3.connect(config.DB_PATH, timeout=10.0, isolation_level=None)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
     conn.executescript(_SCHEMA)
     return conn
 

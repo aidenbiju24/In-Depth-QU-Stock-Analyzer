@@ -26,7 +26,9 @@ from .base import DataProvider
 _TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 _COMPANYFACTS = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:0>10}.json"
 
-# Minimal XBRL concept -> normalized item map (USD units only).
+# Minimal XBRL concept -> normalized item map. Monetary concepts report in
+# USD(-derived) units; share counts report in "shares"; per-share values in
+# "USD/shares". The unit filter below accepts all three families.
 _CONCEPTS = {
     "Revenues": "revenue", "RevenueFromContractWithCustomerExcludingAssessedTax": "revenue",
     "NetIncomeLoss": "net_income", "GrossProfit": "gross_profit",
@@ -135,7 +137,10 @@ class SECProvider(DataProvider):
             if not node:
                 continue
             for unit_key, entries in node.get("units", {}).items():
-                if not unit_key.upper().startswith("USD"):
+                # Accept monetary (USD, USD/shares) and share-count units.
+                # Rejecting non-matching units entirely (rather than guessing)
+                # prevents mixing incompatible measures into one item.
+                if not unit_key.upper().startswith(("USD", "SHARES")):
                     continue
                 for e in entries:
                     if e.get("fp") != "FY" or e.get("form") not in ("10-K", "10-K/A"):

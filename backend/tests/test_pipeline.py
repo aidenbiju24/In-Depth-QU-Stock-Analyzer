@@ -171,6 +171,22 @@ def test_point_in_time_no_future_statements(ingest_db):
     assert "2023-12-31" not in fiscal_dates  # filed 2024-02-15: excluded
 
 
+def test_dcf_inputs_endpoint(ingest_db):
+    """DCF inputs derive from the latest filed statements with placeholders."""
+    svc, _db_path = ingest_db
+    svc.ingest_ticker("AAPL")
+    from app.api import app
+    from fastapi.testclient import TestClient
+    client = TestClient(app)
+    r = client.get("/api/dcf-inputs/AAPL")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["derived"]["base_revenue"] > 0
+    assert body["derived"]["shares_diluted"] > 0
+    assert body["derived"]["current_price"] > 0
+    assert "wacc" in body["placeholders"]
+
+
 def test_api_end_to_end(ingest_db):
     svc, _db_path = ingest_db
     svc.ingest_ticker("AAPL")

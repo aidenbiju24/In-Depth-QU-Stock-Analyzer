@@ -65,10 +65,6 @@ class DCFResult:
     warnings: list[str] = field(default_factory=list)
 
 
-def _expand(x) -> list[float]:
-    return list(x) if isinstance(x, (list, tuple)) else [x] * 99
-
-
 def run_dcf(a: DCFAssumptions, years: int = 5) -> DCFResult:
     a.validate()
     years = max(1, int(years))
