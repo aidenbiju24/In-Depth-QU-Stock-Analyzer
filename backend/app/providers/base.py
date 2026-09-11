@@ -98,10 +98,17 @@ class DataProvider(ABC):
             datetime.now(UTC) + timedelta(seconds=ttl)
         ).strftime("%Y-%m-%dT%H:%M:%SZ")
         # Credentials are stripped before anything touches the database.
+        # Upsert: an expired row keeps its (unique) key until replaced, so a
+        # re-fetch after expiry must overwrite it — a plain INSERT would raise
+        # IntegrityError on every refresh and 500 the request.
         with connect() as conn:
             conn.execute(
                 "INSERT INTO raw_cache (key, source, endpoint, params_json, payload,"
-                " retrieved_at, expires_at) VALUES (?,?,?,?,?,?,?)",
+                " retrieved_at, expires_at) VALUES (?,?,?,?,?,?,?) "
+                "ON CONFLICT(key) DO UPDATE SET source = excluded.source,"
+                " endpoint = excluded.endpoint, params_json = excluded.params_json,"
+                " payload = excluded.payload, retrieved_at = excluded.retrieved_at,"
+                " expires_at = excluded.expires_at",
                 (key, self.name, endpoint,
                  json.dumps(_sanitize_params(params), default=str),
                  json.dumps(payload), utcnow(), expires),

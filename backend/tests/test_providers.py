@@ -6,7 +6,8 @@ All providers are exercised through a stubbed _fetch — no network, no keys.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+import json
+from datetime import UTC, date, timedelta
 
 import pandas as pd
 import pytest
@@ -227,6 +228,87 @@ def test_fmp_error_messages_redact_the_api_key(tmp_path, monkeypatch):
     with pytest.raises(ProviderError) as excinfo:
         prov.get_company("TST")
     assert "SECRETKEY456" not in str(excinfo.value)
+
+
+# --------------------------------------------------------------------------
+# Cache expiry refresh: re-fetching after expiry must overwrite, not crash
+# --------------------------------------------------------------------------
+def test_cache_refresh_after_expiry_upserts_instead_of_crashing(tmp_path, monkeypatch):
+    """Regression: raw_cache.key is UNIQUE and _cache_put used a plain INSERT,
+    so the first re-fetch after any cache entry expired raised
+    sqlite3.IntegrityError and 500'd every provider-backed request."""
+    monkeypatch.setenv("QUANT_DB_PATH", str(tmp_path / "cache.db"))
+    import app.config as cfg
+    monkeypatch.setattr(cfg.config, "DB_PATH", str(tmp_path / "cache.db"))
+
+    class _PayloadFixed(DataProvider):
+        def __init__(self, name: str):
+            self.name = name
+
+        def available(self):
+            return True
+
+        def get_daily_prices(self, ticker, outputsize="full"):
+            return []
+
+        def get_company(self, ticker):
+            return None
+
+        def get_fundamentals(self, ticker):
+            return None
+
+        def get_income_statement(self, ticker, period="annual"):
+            return []
+
+        def get_balance_sheet(self, ticker, period="annual"):
+            return []
+
+        def get_cash_flow(self, ticker, period="annual"):
+            return []
+
+        def get_earnings(self, ticker):
+            return []
+
+        def get_benchmark_prices(self, ticker, outputsize="full"):
+            return []
+
+    prov = _PayloadFixed("stub-provider")
+    calls = {"n": 0}
+
+    def fake_http_get(url, params=None, headers=None):
+        calls["n"] += 1
+        return {"n": calls["n"]}  # payload changes each call
+
+    monkeypatch.setattr(prov, "_http_get", fake_http_get)
+
+    # First fetch: live call, cached.
+    p1 = prov._fetch("stub-endpoint", {"symbol": "TST"}, "default")
+    assert calls["n"] == 1 and p1 == {"n": 1}
+
+    # Simulate expiry of the cached row (backdate it).
+    import sqlite3
+    from datetime import datetime, timedelta
+    con = sqlite3.connect(tmp_path / "cache.db")
+    try:
+        con.execute(
+            "UPDATE raw_cache SET expires_at = ?",
+            ((datetime.now(UTC) - timedelta(minutes=1))
+             .strftime("%Y-%m-%dT%H:%M:%SZ"),),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+    # Second fetch: cached row is expired, so _fetch goes live again and must
+    # OVERWRITE the stale row. Pre-fix this raised IntegrityError.
+    p2 = prov._fetch("stub-endpoint", {"symbol": "TST"}, "default")
+    assert calls["n"] == 2
+    assert p2 == {"n": 2}
+
+    # Exactly one row remains, refreshed with the new payload.
+    rows = _raw_cache_rows(tmp_path / "cache.db")
+    assert len(rows) == 1
+    assert json.loads(rows[0][2]) == {"n": 2}
 
 
 # --------------------------------------------------------------------------
