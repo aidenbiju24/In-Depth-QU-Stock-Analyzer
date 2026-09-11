@@ -1,14 +1,20 @@
 /** Typed client for the local FastAPI backend.
  *
  * The browser talks ONLY to our own quant service — never to external data
- * providers (PROJECT_SPEC §8). In dev it calls FastAPI directly on :8000
- * (CORS is configured server-side); the Next.js rewrite for /api/* remains
- * as a fallback for deployments that prefer same-origin proxying.
- * Override with NEXT_PUBLIC_QUANT_API_URL when serving from another origin.
+ * providers (PROJECT_SPEC §8).
+ *
+ * - Production builds default to SAME-ORIGIN `/api` (next start rewrites or
+ *   any reverse proxy forwards to FastAPI) — no cross-origin exposure.
+ * - Dev defaults to FastAPI directly on :8000 because Next's dev rewrite
+ *   proxy drops POST bodies; CORS is configured server-side for this.
+ * - Override either case with NEXT_PUBLIC_QUANT_API_URL.
  */
 
 export const API =
-  process.env.NEXT_PUBLIC_QUANT_API_URL ?? "http://127.0.0.1:8000/api";
+  process.env.NEXT_PUBLIC_QUANT_API_URL ??
+  (process.env.NODE_ENV === "production"
+    ? "/api"
+    : "http://127.0.0.1:8000/api");
 
 export class ApiError extends Error {
   status: number;

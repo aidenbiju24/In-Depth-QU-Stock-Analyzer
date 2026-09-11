@@ -2,6 +2,9 @@
   "name": "quant-stock-analyzer-web",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "description": "In-Depth Quant Stock Analyzer — Next.js research terminal",
   "scripts": {
     "dev": "next dev",

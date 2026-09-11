@@ -59,11 +59,16 @@ FMP ───────────┘                                        
                                           Next.js UI (never touches providers)
 ```
 
-- The **frontend never calls external APIs**. It talks to FastAPI through a
-  Next.js rewrite (`/api/*` → `http://127.0.0.1:8000`).
+- The **frontend never calls external APIs**. In production it talks to
+  FastAPI same-origin through the Next.js rewrite (`/api/*` →
+  `QUANT_API_URL`, default `http://127.0.0.1:8000`); in dev it calls
+  FastAPI directly on :8000 (Next's dev proxy drops slow/empty POSTs).
 - Providers are swappable: each implements the `DataProvider` interface in
   `backend/app/providers/base.py` and returns normalized schemas.
-- Credentials live only in the Python process, loaded from `.env.local`.
+- Credentials live only in the Python process, loaded from `.env.local`
+  (repo root or `backend/`).
+- SEC fetches are cached (24h companyfacts TTL) and throttled to SEC's
+  fair-access limit; Alpha Vantage calls respect a daily budget.
 
 ---
 
@@ -109,11 +114,31 @@ Notes:
 # Terminal 1 — quant engine
 ./.venv/Scripts/python.exe -m uvicorn app.api:app --app-dir backend --port 8000
 
-# Terminal 2 — research terminal
+# Terminal 2 — research terminal (dev)
 npm run dev
 ```
 
 Open <http://localhost:3000>.
+
+### Production mode
+
+```bash
+npm run build
+npm run start          # serves the built app + proxies /api to FastAPI
+```
+
+Deployment variables (all optional):
+
+- `QUANT_API_URL` — where the Next.js rewrite forwards `/api/*` (default
+  `http://127.0.0.1:8000`).
+- `NEXT_PUBLIC_QUANT_API_URL` — override the frontend's API base entirely
+  (e.g. when FastAPI is exposed on its own domain).
+- `CORS_ORIGINS` — comma-separated extra origins allowed by FastAPI when the
+  frontend is served cross-origin (default covers localhost/127.0.0.1:3000).
+- `QUANT_DB_PATH`, `RISK_FREE_RATE`, `AV_DAILY_BUDGET` — see `.env.example`.
+
+Run uvicorn behind a process manager (or at least `--workers 2`) for
+unattended use; SQLite suits a single team's research workload.
 
 First workflow: on the **Dashboard**, enter tickers (e.g. `AAPL,MSFT,NVDA`) and
 press **Ingest + Analyze**. Data is fetched from providers, normalized,

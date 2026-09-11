@@ -77,7 +77,17 @@ class SECProvider(DataProvider):
         return bool(config.SEC_USER_AGENT)
 
     # ------------------------------------------------------------- plumbing
-    def _sec_get(self, url: str) -> dict:
+    def _sec_get(self, url: str, kind: str = "sec_facts") -> dict:
+        """Cached + throttled SEC fetch.
+
+        companyfacts payloads are multi-MB and SEC updates them at most daily;
+        re-downloading on every ingest violates the caching requirement
+        (PROJECT_SPEC §40) and, worse, the 7.5s throttle means four uncached
+        calls cost ~30s per ticker. Cache-first keeps repeat ingests instant.
+        """
+        cached = self._cache_get(url, {}, kind)
+        if cached is not None:
+            return cached
         # Throttle to <= 8 requests/minute against SEC infrastructure.
         elapsed = time.monotonic() - self._last_request_ts
         wait = max(0.0, 7.5 - elapsed)
@@ -87,13 +97,14 @@ class SECProvider(DataProvider):
                                                "Accept-Encoding": "gzip, deflate"})
         self._last_request_ts = time.monotonic()
         self._record_usage()
+        self._cache_put(url, {}, payload, kind)
         return payload
 
     def _cik_for(self, ticker: str) -> int:
         t = ticker.upper().strip()
         if t in self._cik_cache:
             return self._cik_cache[t]
-        mapping = self._sec_get(_TICKERS_URL)
+        mapping = self._sec_get(_TICKERS_URL, kind="default")  # 1h TTL
         for row in mapping.values():
             if str(row.get("ticker", "")).upper() == t:
                 cik = int(row["cik_str"])

@@ -7,6 +7,7 @@ any response.
 """
 from __future__ import annotations
 
+import os
 from datetime import date
 
 import pandas as pd
@@ -43,12 +44,18 @@ app = FastAPI(
     description="Quantitative research platform backend (Wharton competition project).",
 )
 
+# CORS: dev origins by default; set CORS_ORIGINS="https://app.example.com,https://alt"
+# when the frontend is served from other origins (comma-separated). Same-origin
+# deployments (frontend proxied through next start / a reverse proxy) need none.
+_CORS_ORIGINS = [
+    o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()
+] or [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=_CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
