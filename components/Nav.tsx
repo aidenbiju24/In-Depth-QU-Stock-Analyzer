@@ -34,6 +34,11 @@ export function Nav() {
   }, []);
 
   const up = health !== null;
+  const missingKeys = health
+    ? Object.entries(health.credentials_missing)
+        .filter(([, missing]) => missing)
+        .map(([key]) => key)
+    : [];
 
   return (
     <aside
@@ -99,9 +104,9 @@ export function Nav() {
         </div>
         {health && (
           <div className="dim" style={{ fontSize: 11, marginTop: 6 }}>
-            {health.credentials_missing.length === 0
+            {missingKeys.length === 0
               ? "All provider keys configured"
-              : `Missing: ${health.credentials_missing.join(", ")}`}
+              : `Missing: ${missingKeys.join(", ")}`}
           </div>
         )}
         {health && (
