@@ -1,11 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { fetchModelRuns, type ModelRun } from "@/lib/api";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import {
+  fetchModelRuns,
+  fetchModelRun,
+  type ModelRun,
+  type ModelRunDetail,
+} from "@/lib/api";
+
+function fmtRunAt(iso: string): string {
+  // Backend timestamps look like "2026-09-14T02:03:21Z" (or without Z).
+  if (!iso) return "—";
+  return iso.replace("T", " ").replace("Z", "");
+}
 
 export default function AuditPage() {
   const [runs, setRuns] = useState<ModelRun[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [detail, setDetail] = useState<ModelRunDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -18,13 +31,38 @@ export default function AuditPage() {
     load();
   }, [load]);
 
+  // The list endpoint returns summary rows only; parameters/output live on
+  // the detail endpoint, fetched when a row is expanded.
+  const toggle = useCallback(
+    (id: number) => {
+      if (expanded === id) {
+        setExpanded(null);
+        setDetail(null);
+        return;
+      }
+      setExpanded(id);
+      setDetail(null);
+      setDetailLoading(true);
+      fetchModelRun(id)
+        .then(setDetail)
+        .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+        .finally(() => setDetailLoading(false));
+    },
+    [expanded]
+  );
+
   return (
     <div>
-      <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Model Runs</h1>
-      <p className="muted" style={{ marginBottom: 16 }}>
-        Every model execution is recorded — inputs, parameters, outputs, versions,
-        and data timestamps — so any conclusion can be audited later.
-      </p>
+      <header className="page-head">
+        <div>
+          <div className="page-kicker">Audit Trail</div>
+          <h1 className="page-title">Model Runs</h1>
+          <p className="page-sub">
+            Every model execution is recorded — inputs, parameters, outputs, versions,
+            and data timestamps — so any conclusion can be audited later.
+          </p>
+        </div>
+      </header>
 
       {error && <div className="err" style={{ marginBottom: 14 }}>{error}</div>}
 
@@ -43,61 +81,79 @@ export default function AuditPage() {
           </thead>
           <tbody>
             {runs.map((r) => (
-              <>
-                <tr key={r.id}>
+              <Fragment key={r.id}>
+                <tr>
                   <td className="dim">{r.id}</td>
-                  <td className="num">{r.executed_at.replace("T", " ").replace("Z", "")}</td>
+                  <td className="num">{fmtRunAt(r.run_at)}</td>
                   <td style={{ fontWeight: 600 }}>{r.model}</td>
-                  <td className="dim">{r.model_version}</td>
+                  <td className="dim">{r.version}</td>
                   <td>{r.subject}</td>
                   <td className="num dim">{r.input_as_of ?? "—"}</td>
                   <td>
                     <button
                       className="btn"
                       style={{ padding: "2px 8px", fontSize: 11 }}
-                      onClick={() => setExpanded(expanded === r.id ? null : r.id)}
+                      onClick={() => toggle(r.id)}
                     >
                       {expanded === r.id ? "Hide" : "Inspect"}
                     </button>
                   </td>
                 </tr>
                 {expanded === r.id && (
-                  <tr key={`${r.id}-detail`}>
+                  <tr>
                     <td colSpan={7} style={{ background: "var(--bg)" }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: 6 }}>
-                        <div>
-                          <div className="panel-title">Parameters</div>
-                          <pre
-                            className="num"
-                            style={{
-                              fontSize: 11,
-                              whiteSpace: "pre-wrap",
-                              color: "var(--muted)",
-                              margin: 0,
-                            }}
-                          >
-                            {JSON.stringify(r.parameters, null, 2) ?? "—"}
-                          </pre>
+                      {detailLoading && (
+                        <div className="muted" style={{ padding: 6 }}>
+                          Loading detail…
                         </div>
-                        <div>
-                          <div className="panel-title">Output</div>
-                          <pre
-                            className="num"
-                            style={{
-                              fontSize: 11,
-                              whiteSpace: "pre-wrap",
-                              color: "var(--muted)",
-                              margin: 0,
-                            }}
-                          >
-                            {JSON.stringify(r.output, null, 2) ?? "—"}
-                          </pre>
+                      )}
+                      {detail && detail.id === r.id && (
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: 12,
+                            padding: 6,
+                          }}
+                        >
+                          <div>
+                            <div className="panel-title">Parameters</div>
+                            <pre
+                              className="num"
+                              style={{
+                                fontSize: 11,
+                                whiteSpace: "pre-wrap",
+                                color: "var(--muted)",
+                                margin: 0,
+                              }}
+                            >
+                              {detail.parameters
+                                ? JSON.stringify(detail.parameters, null, 2)
+                                : "—"}
+                            </pre>
+                          </div>
+                          <div>
+                            <div className="panel-title">Output</div>
+                            <pre
+                              className="num"
+                              style={{
+                                fontSize: 11,
+                                whiteSpace: "pre-wrap",
+                                color: "var(--muted)",
+                                margin: 0,
+                              }}
+                            >
+                              {detail.output
+                                ? JSON.stringify(detail.output, null, 2)
+                                : "—"}
+                            </pre>
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
             {runs.length === 0 && (
               <tr>

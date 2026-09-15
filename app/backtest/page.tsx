@@ -49,15 +49,20 @@ export default function BacktestPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Backtesting</h1>
-      <p className="muted" style={{ marginBottom: 16 }}>
-        Factor backtests with point-in-time scoring: at each rebalance date the
-        factor model is recomputed using only data that was public on that date
-        (filing-date aware). Execution happens at the next bar — no look-ahead.
-      </p>
+      <header className="page-head">
+        <div>
+          <div className="page-kicker">Strategy Validation</div>
+          <h1 className="page-title">Backtesting</h1>
+          <p className="page-sub">
+            Factor backtests with point-in-time scoring: at each rebalance date the
+            factor model is recomputed using only data that was public on that date
+            (filing-date aware). Execution happens at the next bar — no look-ahead.
+          </p>
+        </div>
+      </header>
 
       <div className="panel panel-pad" style={{ marginBottom: 14 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 1fr auto", gap: 10, alignItems: "flex-end" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, alignItems: "flex-end" }}>
           <div>
             <label className="label">Universe</label>
             <input className="input" value={universe} onChange={(e) => setUniverse(e.target.value)} />
@@ -104,7 +109,7 @@ export default function BacktestPage() {
 
       {result && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 12 }}>
             <StatTile label="Total return" value={fmtPct(Number(result.stats.total_return ?? 0))} />
             <StatTile label="Ann. return" value={fmtPct(Number(result.stats.annualized_return ?? 0))} />
             <StatTile label="Volatility" value={fmtPct(Number(result.stats.volatility ?? 0))} />
@@ -131,7 +136,7 @@ export default function BacktestPage() {
             />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div className="split-even">
             <div className="panel panel-pad">
               <div className="panel-title">Performance detail</div>
               <table className="data">

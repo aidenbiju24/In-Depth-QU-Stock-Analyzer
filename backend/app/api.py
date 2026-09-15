@@ -13,6 +13,7 @@ from datetime import date
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .config import DCF_MODEL_VERSION, config, missing_credentials
@@ -70,6 +71,10 @@ def _err(status: int, detail: str) -> HTTPException:
 
 @app.exception_handler(QuantError)
 def _quant_error_handler(request, exc: QuantError):
+    # Exception handlers must return a Response (NOT an HTTPException —
+    # returning one raises "'HTTPException' object is not callable" inside
+    # Starlette and the client gets a header-less 500 that browsers report
+    # as a CORS/network failure, hiding the real error message).
     status = {
         ProviderError: 502,
         MissingDataError: 404,
@@ -77,7 +82,7 @@ def _quant_error_handler(request, exc: QuantError):
         CalculationError: 422,
         InvalidAssumptionError: 422,
     }.get(type(exc), 500)
-    return HTTPException(status_code=status, detail=str(exc))
+    return JSONResponse(status_code=status, content={"detail": str(exc)})
 
 
 def _prices_frame(conn, ticker: str) -> pd.Series:

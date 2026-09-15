@@ -96,18 +96,23 @@ export default function JournalPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Research Journal</h1>
-      <p className="muted" style={{ marginBottom: 16 }}>
-        Append-only decision record. Each entry snapshots the full quantitative
-        picture at decision time — never overwritten, only outcomes updated.
-      </p>
+      <header className="page-head">
+        <div>
+          <div className="page-kicker">Decision Log</div>
+          <h1 className="page-title">Research Journal</h1>
+          <p className="page-sub">
+            Append-only decision record. Each entry snapshots the full quantitative
+            picture at decision time — never overwritten, only outcomes updated.
+          </p>
+        </div>
+      </header>
 
       {error && <div className="err" style={{ marginBottom: 14 }}>{error}</div>}
       {ok && <div className="info" style={{ marginBottom: 14 }}>{ok}</div>}
 
       <div className="panel panel-pad" style={{ marginBottom: 14 }}>
         <div className="panel-title">Record a decision (auto-snapshots current scores)</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 12 }}>
+        <div className="split" style={{ gap: 12 }}>
           <div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
               <div>

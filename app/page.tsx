@@ -90,26 +90,31 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Dashboard</h1>
-      <p className="muted" style={{ marginBottom: 16 }}>
-        Quantitative ranking across your research universe. Every score is fully
-        traceable on the Stock Research page.
-      </p>
+      <header className="page-head">
+        <div>
+          <div className="page-kicker">Overview</div>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-sub">
+            Quantitative ranking across your research universe. Every score is fully
+            traceable on the Stock Research page.
+          </p>
+        </div>
+      </header>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 16 }}>
         <StatTile
           label="Companies"
-          value={health?.row_counts.companies ?? "—"}
-          sub={health ? `${health.row_counts.prices ?? 0} price rows stored` : "backend offline"}
+          value={health ? (health.row_counts.companies ?? 0).toLocaleString() : "—"}
+          sub={health ? `${(health.row_counts.prices ?? 0).toLocaleString()} price rows stored` : "backend offline"}
         />
         <StatTile
           label="Statements"
-          value={health?.row_counts.financial_statements ?? "—"}
+          value={health ? (health.row_counts.financial_statements ?? 0).toLocaleString() : "—"}
           sub={health ? `${health.row_counts.fundamentals ?? 0} fundamental snapshots` : ""}
         />
         <StatTile
           label="Model Runs"
-          value={health?.row_counts.model_runs ?? "—"}
+          value={health ? (health.row_counts.model_runs ?? 0).toLocaleString() : "—"}
           sub="audit trail"
         />
         <StatTile

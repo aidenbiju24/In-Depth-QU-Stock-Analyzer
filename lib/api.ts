@@ -188,8 +188,11 @@ export interface SensitivityResponse {
 
 export interface MonteCarloResponse {
   ticker: string;
+  current_price: number;
   days: number;
   n_simulations: number;
+  mu_annual: number;
+  sigma_annual: number;
   seed: number;
   mean: number;
   median: number;
@@ -200,7 +203,14 @@ export interface MonteCarloResponse {
   p95: number;
   prob_gain: number;
   prob_loss: number;
-  percentile_path: Record<string, number[]>;
+  percentile_path: {
+    days: number[];
+    p5: number[];
+    p25: number[];
+    p50: number[];
+    p75: number[];
+    p95: number[];
+  };
   version: string;
   disclaimer: string;
 }
@@ -315,12 +325,16 @@ export interface DecisionRecord {
 export interface ModelRun {
   id: number;
   model: string;
-  model_version: string;
+  version: string;
   subject: string;
   input_as_of: string | null;
-  executed_at: string;
+  run_at: string;
+}
+
+export interface ModelRunDetail extends ModelRun {
   parameters: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
+  source_data: Record<string, unknown> | null;
 }
 
 // ------------------------------------------------------------- endpoints
@@ -384,3 +398,4 @@ export const recordDecision = (body: Partial<DecisionRecord> & { ticker: string;
 export const updateOutcome = (id: number, outcome: string) =>
   patchQ<{ ok: boolean }>(`/decisions/${id}/outcome`, `outcome=${encodeURIComponent(outcome)}`);
 export const fetchModelRuns = () => get<ModelRun[]>("/model_runs");
+export const fetchModelRun = (id: number) => get<ModelRunDetail>(`/model_runs/${id}`);

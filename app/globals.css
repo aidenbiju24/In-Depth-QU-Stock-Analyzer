@@ -1,18 +1,43 @@
 @import "tailwindcss";
 
+/* ============================================================================
+   Design system — "institutional research terminal"
+   Dark, calm, data-first. Every value is a CSS variable so charts and inline
+   styles stay in sync. Typography: Inter (UI) + JetBrains Mono (numerals).
+   ========================================================================== */
+
 :root {
-  --bg: #0a0e14;
-  --panel: #111726;
-  --panel-2: #161e30;
-  --border: #232d44;
-  --border-strong: #2e3a56;
-  --text: #e6ebf4;
-  --muted: #8b95ab;
-  --dim: #5d6982;
-  --accent: #4da3ff;
-  --green: #34d399;
-  --red: #f87171;
-  --amber: #fbbf24;
+  /* surfaces */
+  --bg: #070b12;
+  --bg-glow: radial-gradient(1100px 500px at 18% -10%, rgba(91, 140, 255, 0.07), transparent 60%),
+    radial-gradient(900px 420px at 100% 0%, rgba(61, 220, 151, 0.04), transparent 55%);
+  --panel: #0d1320;
+  --panel-2: #131b2c;
+  --panel-3: #1a2438;
+  --border: #1e2940;
+  --border-strong: #2c3a58;
+
+  /* text */
+  --text: #e9edf6;
+  --muted: #93a0b8;
+  --dim: #5f6c86;
+
+  /* brand + semantics */
+  --accent: #5b8cff;
+  --accent-strong: #7ba3ff;
+  --accent-soft: rgba(91, 140, 255, 0.12);
+  --green: #3ddc97;
+  --red: #ff6b7a;
+  --amber: #ffc247;
+
+  /* effects */
+  --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px rgba(2, 6, 16, 0.35);
+  --radius: 12px;
+  --radius-sm: 8px;
+
+  /* fonts — provided by next/font in layout.tsx, with system fallbacks */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 html {
@@ -21,98 +46,224 @@ html {
 
 body {
   background: var(--bg);
+  background-image: var(--bg-glow);
+  background-attachment: fixed;
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans);
   font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(91, 140, 255, 0.35);
+}
+
+/* scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 8px;
+  border: 2px solid var(--bg);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------------------------------------------------------------- page head */
+.page-head {
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.page-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-kicker::before {
+  content: "";
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+}
+
+.page-title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.page-sub {
+  color: var(--muted);
+  font-size: 13px;
+  max-width: 72ch;
+  margin: 6px 0 0;
 }
 
 /* ---------------------------------------------------------------- panels */
 .panel {
-  background: var(--panel);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 40%), var(--panel);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
 }
 
 .panel-pad {
-  padding: 14px 16px;
+  padding: 16px 18px;
 }
 
 .panel-title {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-title::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(91, 140, 255, 0.8);
+  flex: none;
 }
 
 .num {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
+  letter-spacing: -0.01em;
 }
 
-/* ------------------------------------------------------------- primitives */
+/* ---------------------------------------------------------------- buttons */
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 6px;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-strong);
   background: var(--panel-2);
   color: var(--text);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease,
+    box-shadow 0.15s ease;
 }
 
 .btn:hover:not(:disabled) {
   border-color: var(--accent);
+  background: var(--panel-3);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1px var(--accent);
+}
+
 .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #06121f;
-  font-weight: 600;
+  background: linear-gradient(180deg, var(--accent-strong), var(--accent));
+  border-color: transparent;
+  color: #04101f;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(91, 140, 255, 0.3);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #6cb5ff;
+  background: linear-gradient(180deg, #8db1ff, var(--accent-strong));
+  box-shadow: 0 6px 18px rgba(91, 140, 255, 0.4);
 }
 
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+/* ---------------------------------------------------------------- inputs */
 .input {
   background: var(--bg);
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   color: var(--text);
-  padding: 7px 10px;
+  padding: 8px 12px;
   font-size: 13px;
   font-family: inherit;
   width: 100%;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input::placeholder {
+  color: var(--dim);
 }
 
 .input:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+select.input,
+.input[type="number"] {
+  font-family: var(--font-mono);
 }
 
 .label {
   display: block;
-  font-size: 11px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--muted);
-  margin-bottom: 4px;
-  font-weight: 500;
+  margin-bottom: 5px;
 }
 
+/* ---------------------------------------------------------------- tables */
 table.data {
   width: 100%;
   border-collapse: collapse;
@@ -121,18 +272,21 @@ table.data {
 
 table.data th {
   text-align: left;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--dim);
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.015);
   white-space: nowrap;
+  position: sticky;
+  top: 0;
 }
 
 table.data td {
-  padding: 8px 10px;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
@@ -141,10 +295,54 @@ table.data tr:last-child td {
   border-bottom: none;
 }
 
-table.data tbody tr:hover {
-  background: rgba(77, 163, 255, 0.05);
+table.data tbody tr {
+  transition: background 0.12s ease;
 }
 
+table.data tbody tr:hover {
+  background: rgba(91, 140, 255, 0.06);
+}
+
+/* ---------------------------------------------------------------- badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid;
+}
+
+/* ---------------------------------------------------------------- layout helpers */
+.split {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 14px;
+}
+
+.split-even {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 920px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .split-even {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------------------------------------------------------------- signals */
 .pos {
   color: var(--green);
 }
@@ -162,20 +360,20 @@ table.data tbody tr:hover {
 }
 
 .err {
-  background: rgba(248, 113, 113, 0.08);
-  border: 1px solid rgba(248, 113, 113, 0.35);
-  color: #fca5a5;
-  border-radius: 6px;
-  padding: 10px 12px;
+  background: rgba(255, 107, 122, 0.08);
+  border: 1px solid rgba(255, 107, 122, 0.35);
+  color: #ffb3bc;
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
   font-size: 13px;
 }
 
 .info {
-  background: rgba(77, 163, 255, 0.07);
-  border: 1px solid rgba(77, 163, 255, 0.3);
-  color: #a5cdff;
-  border-radius: 6px;
-  padding: 10px 12px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(91, 140, 255, 0.3);
+  color: #b9d0ff;
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
   font-size: 13px;
 }
 
@@ -196,9 +394,14 @@ table.data tbody tr:hover {
 }
 
 .chart-tooltip {
-  background: var(--panel-2);
+  background: var(--panel-3);
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
   font-size: 12px;
+  box-shadow: 0 8px 24px rgba(2, 6, 16, 0.5);
+}
+
+.chart-tooltip .num {
+  font-family: var(--font-mono);
 }

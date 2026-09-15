@@ -120,15 +120,20 @@ export default function PortfolioPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Portfolio</h1>
-      <p className="muted" style={{ marginBottom: 16 }}>
-        Holdings, risk analytics, correlation structure, and optimization — computed
-        from stored price history.
-      </p>
+      <header className="page-head">
+        <div>
+          <div className="page-kicker">Construction &amp; Risk</div>
+          <h1 className="page-title">Portfolio</h1>
+          <p className="page-sub">
+            Holdings, risk analytics, correlation structure, and optimization — computed
+            from stored price history.
+          </p>
+        </div>
+      </header>
 
       {error && <div className="err" style={{ marginBottom: 14 }}>{error}</div>}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 12, marginBottom: 14 }}>
+      <div className="split" style={{ marginBottom: 14 }}>
         <div className="panel panel-pad">
           <div className="panel-title">Create portfolio</div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -203,7 +208,7 @@ export default function PortfolioPage() {
         <div>
           {analytics ? (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 12 }}>
                 <StatTile label="Total value" value={fmtUSD(analytics.total_value)} />
                 <StatTile
                   label="Sharpe"

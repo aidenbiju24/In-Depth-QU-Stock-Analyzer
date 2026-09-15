@@ -25,7 +25,7 @@ import {
   type SensitivityResponse,
 } from "@/lib/api";
 import { ScoreBar, StatTile } from "@/components/StatTile";
-import { EquityChart } from "@/components/charts";
+import { EquityChart, MonteCarloFanChart } from "@/components/charts";
 import {
   actionColor,
   fmtNum,
@@ -232,10 +232,15 @@ function ResearchInner() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Stock Research</h1>
-      <p className="muted" style={{ marginBottom: 16 }}>
-        Enter a ticker, ingest data, and inspect every number behind the scores.
-      </p>
+      <header className="page-head">
+        <div>
+          <div className="page-kicker">Equity Analysis</div>
+          <h1 className="page-title">Stock Research</h1>
+          <p className="page-sub">
+            Enter a ticker, ingest data, and inspect every number behind the scores.
+          </p>
+        </div>
+      </header>
 
       <div className="panel panel-pad" style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 8 }}>
@@ -257,7 +262,7 @@ function ResearchInner() {
       {error && <div className="err" style={{ marginBottom: 14 }}>{error}</div>}
 
       {analysis && (
-        <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12, marginBottom: 14 }}>
           <div className="panel panel-pad">
             <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
               <span style={{ fontSize: 22, fontWeight: 700 }}>{loaded}</span>
@@ -384,7 +389,7 @@ function ResearchInner() {
               {analysis.missing.length > 0 && (
                 <div className="info" style={{ marginTop: 10 }}>
                   <b>Missing inputs (never fabricated):</b>{" "}
-                  {analysis.missing.map((m) => `${m.metric} (${m.reason})`).join("; ")}
+                  {analysis.missing.join("; ")}
                 </div>
               )}
             </div>
@@ -406,7 +411,7 @@ function ResearchInner() {
                 Not derivable from stored filings (defaulting): {dcfMissing.join(", ")}
               </div>
             )}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
               {field("base_revenue", "Base revenue")}
               {field("revenue_growth", "Revenue growth /yr")}
               {field("ebit_margin", "EBIT margin")}
@@ -429,7 +434,7 @@ function ResearchInner() {
 
           {dcf && (
             <div className="panel-pad" style={{ borderTop: "1px solid var(--border)" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, margin: "4px 0 12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, margin: "4px 0 12px" }}>
                 <StatTile label="Fair value / share" value={fmtUSD(dcf.fair_value_per_share)} />
                 <StatTile
                   label="Upside vs current"
@@ -508,20 +513,38 @@ function ResearchInner() {
       )}
 
       {analysis && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+        <div className="split-even" style={{ marginBottom: 14 }}>
           <div className="panel panel-pad">
             <div className="panel-title">Monte Carlo (10,000 sims, seeded)</div>
             <button className="btn" onClick={runMcNow} disabled={mc !== null || busy}>
               {mc ? "Computed" : "Simulate 1y price distribution"}
             </button>
             {mc && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8, marginTop: 12 }}>
                 <StatTile label="Median" value={fmtUSD(mc.median)} />
                 <StatTile label="5th pct" value={fmtUSD(mc.p05)} color="var(--red)" />
                 <StatTile label="95th pct" value={fmtUSD(mc.p95)} color="var(--green)" />
                 <StatTile label="P(gain)" value={fmtPct(mc.prob_gain, 0)} color="var(--green)" />
                 <StatTile label="P(loss)" value={fmtPct(mc.prob_loss, 0)} color="var(--red)" />
                 <StatTile label="Std dev" value={fmtUSD(mc.std)} />
+              </div>
+            )}
+            {mc && mc.percentile_path && (
+              <div style={{ marginTop: 14 }}>
+                <div className="panel-title" style={{ marginBottom: 4 }}>
+                  Simulated 1-year price fan (p5–p95 shaded, line = median)
+                </div>
+                <MonteCarloFanChart
+                  data={mc.percentile_path.days.map((d, i) => ({
+                    day: d,
+                    p5: mc.percentile_path.p5[i],
+                    p25: mc.percentile_path.p25[i],
+                    p50: mc.percentile_path.p50[i],
+                    p75: mc.percentile_path.p75[i],
+                    p95: mc.percentile_path.p95[i],
+                  }))}
+                  currentPrice={mc.current_price}
+                />
               </div>
             )}
             {mc && (
@@ -583,7 +606,7 @@ function ResearchInner() {
           </button>
           {bt && (
             <>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, margin: "12px 0" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8, margin: "12px 0" }}>
                 <StatTile label="Total return" value={fmtPct(Number(bt.stats.total_return ?? 0))} />
                 <StatTile label="Benchmark" value={fmtPct(Number(bt.stats.benchmark_return ?? 0))} />
                 <StatTile label="Excess" value={fmtPct(Number(bt.stats.excess_return ?? 0))} />
